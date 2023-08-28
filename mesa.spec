@@ -2,7 +2,7 @@
 ## (rpmautospec version 0.3.5)
 ## RPMAUTOSPEC: autorelease, autochangelog
 %define autorelease(e:s:pb:n) %{?-p:0.}%{lua:
-    release_number = 1;
+    release_number = 3;
     base_release_number = tonumber(rpm.expand("%{?-b*}%{!?-b:1}"));
     print(release_number + base_release_number - 1);
 }%{?-e:.%{-e*}}%{?-s:.%{-s*}}%{!?-n:%{?dist}}
@@ -31,10 +31,10 @@
 %endif
 %global with_iris   1
 %global with_xa     1
-%global platform_vulkan ,intel,intel_hasvk
+%global intel_platform_vulkan ,intel,intel_hasvk
 %endif
 
-%ifarch aarch64
+%ifarch aarch64 x86_64 %{ix86}
 %if !0%{?rhel}
 %global with_etnaviv   1
 %global with_lima      1
@@ -46,7 +46,7 @@
 %global with_panfrost  1
 %global with_tegra     1
 %global with_xa        1
-%global platform_vulkan ,broadcom,freedreno,panfrost
+%global extra_platform_vulkan ,broadcom,freedreno,panfrost
 %endif
 
 %ifnarch s390x
@@ -58,17 +58,22 @@
 %global with_vmware 1
 %endif
 
+%if !0%{?rhel}
+%global with_libunwind 1
+%global with_lmsensors 1
+%endif
+
 %ifarch %{valgrind_arches}
 %bcond_without valgrind
 %else
 %bcond_with valgrind
 %endif
 
-%global vulkan_drivers swrast%{?base_vulkan}%{?platform_vulkan}
+%global vulkan_drivers swrast%{?base_vulkan}%{?intel_platform_vulkan}%{?extra_platform_vulkan}
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-%global ver 23.1.6
+%global ver 23.2.0-rc2
 Version:        %{lua:ver = string.gsub(rpm.expand("%{ver}"), "-", "~"); print(ver)}
 Release:        %autorelease
 License:        MIT
@@ -82,7 +87,7 @@ Source1:        Mesa-MLAA-License-Clarification-Email.txt
 
 Patch10:        gnome-shell-glthread-disable.patch
 
-BuildRequires:  meson >= 1.0.0
+BuildRequires:  meson >= 1.2.0
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  gettext
@@ -93,7 +98,9 @@ BuildRequires:  kernel-headers
 # SRPMs for each arch still have the same build dependencies. See:
 # https://bugzilla.redhat.com/show_bug.cgi?id=1859515
 BuildRequires:  pkgconfig(libdrm) >= 2.4.97
+%if 0%{?with_libunwind}
 BuildRequires:  pkgconfig(libunwind)
+%endif
 BuildRequires:  pkgconfig(expat)
 BuildRequires:  pkgconfig(zlib) >= 1.2.3
 BuildRequires:  pkgconfig(libzstd)
@@ -123,7 +130,9 @@ BuildRequires:  pkgconfig(xcb-randr)
 BuildRequires:  pkgconfig(xrandr) >= 1.3
 BuildRequires:  bison
 BuildRequires:  flex
+%if 0%{?with_lmsensors}
 BuildRequires:  lm_sensors-devel
+%endif
 %if 0%{?with_vdpau}
 BuildRequires:  pkgconfig(vdpau) >= 1.1
 %endif
@@ -218,10 +227,6 @@ Requires:       %{name}-libglapi%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{relea
 %if 0%{?with_va}
 Recommends:     %{name}-va-drivers%{?_isa}
 %endif
-# If mesa-libEGL is installed, it must match in version. This is here to prevent using
-# mesa-libEGL < 23.0.3-1 (frozen in the 'fedora' repo) which didn't have strong enough
-# inter-dependencies. See https://bugzilla.redhat.com/show_bug.cgi?id=2193135 .
-Requires:       (%{name}-libEGL%{?_isa} = %{?epoch:%{epoch}:}%{version}-%{release} if %{name}-libEGL%{?_isa})
 
 %description dri-drivers
 %{summary}.
@@ -415,6 +420,12 @@ export RUSTFLAGS="%build_rustflags"
   -Dvalgrind=%{?with_valgrind:enabled}%{!?with_valgrind:disabled} \
   -Dbuild-tests=false \
   -Dselinux=true \
+%if !0%{?with_libunwind}
+  -Dlibunwind=disabled \
+%endif
+%if !0%{?with_lmsensors}
+  -Dlmsensors=disabled \
+%endif
   -Dandroid-libbacktrace=disabled \
   %{nil}
 %meson_build
@@ -548,7 +559,7 @@ popd
 %{_libdir}/dri/i915_dri.so
 %{_libdir}/dri/iris_dri.so
 %endif
-%ifarch aarch64
+%ifarch aarch64 x86_64 %{ix86}
 %{_libdir}/dri/ingenic-drm_dri.so
 %{_libdir}/dri/imx-drm_dri.so
 %{_libdir}/dri/imx-lcdif_dri.so
@@ -656,7 +667,7 @@ popd
 %{_libdir}/libvulkan_intel_hasvk.so
 %{_datadir}/vulkan/icd.d/intel_hasvk_icd.*.json
 %endif
-%ifarch aarch64
+%ifarch aarch64 x86_64 %{ix86}
 %{_libdir}/libvulkan_broadcom.so
 %{_datadir}/vulkan/icd.d/broadcom_icd.*.json
 %{_libdir}/libvulkan_freedreno.so
@@ -667,8 +678,14 @@ popd
 %endif
 
 %changelog
-* Wed Aug 16 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.6-1
-- Update to 23.1.6
+* Mon Aug 14 2023 Neal Gompa <ngompa@fedoraproject.org> - 23.2.0~rc2-3
+- Enable all aarch64 drivers for x86 for x86 emulation on aarch64
+
+* Sat Aug 12 2023 Neal Gompa <ngompa@fedoraproject.org> - 23.2.0~rc2-2
+- Bump Meson minimum build dependency to 1.2.0
+
+* Thu Aug 10 2023 Pete Walter <pwalter@fedoraproject.org> - 23.2.0~rc2-1
+- Update to 23.2.0-rc2
 
 * Thu Aug 03 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.5-1
 - Update to 23.1.5
@@ -676,20 +693,35 @@ popd
 * Sat Jul 22 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.4-1
 - Update to 23.1.4
 
+* Thu Jul 20 2023 Fedora Release Engineering <releng@fedoraproject.org> - 23.1.3-4
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_39_Mass_Rebuild
+
+* Sun Jul 16 2023 Yaakov Selkowitz <yselkowi@redhat.com> - 23.1.3-3
+- Disable libunwind, lm_sensors in RHEL builds
+
+* Thu Jul 13 2023 Kamil Páral <kparal@redhat.com> - 23.1.3-2
+- Prevent partial updates (rhbz#2193135)
+
 * Fri Jun 30 2023 Nicolas Chauvet <kwizart@gmail.com> - 23.1.3-1
 - Update to 23.1.3
 
 * Sun Jun 11 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.2-1
 - Update to 23.1.2
 
-* Sun Jun 11 2023 Neal Gompa <ngompa@fedoraproject.org> - 23.1.1-2
+* Wed Jun 07 2023 Neal Gompa <ngompa@fedoraproject.org> - 23.1.1-2
 - Enable stack trace and HUD sensor support
 
-* Tue May 30 2023 Dave Airlie <airlied@redhat.com> - 23.1.1-1
-- Update to mesa 23.1.1
+* Thu May 25 2023 Dave Airlie <airlied@redhat.com> - 23.1.1-1
+- update to 23.1.1
 
-* Fri May 05 2023 Kamil Páral <kparal@redhat.com> - 23.0.3-5
-- Prevent partial updates (rhbz#2193135)
+* Tue May 23 2023 Dave Airlie <airlied@redhat.com> - 23.1.0-3
+- removed unused BR
+
+* Tue May 23 2023 Dave Airlie <airlied@redhat.com> - 23.1.0-2
+- Update to mesa 23.1.0
+
+* Tue May 23 2023 Dave Airlie <airlied@redhat.com> - 23.1.0-1
+- Update to mesa 23.1.0
 
 * Wed May 03 2023 Michel Dänzer <mdaenzer@redhat.com> - 23.0.3-4
 - Do not enable intel-clc for ELN/RHEL
