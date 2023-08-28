@@ -2,7 +2,7 @@
 ## (rpmautospec version 0.3.5)
 ## RPMAUTOSPEC: autorelease, autochangelog
 %define autorelease(e:s:pb:n) %{?-p:0.}%{lua:
-    release_number = 1;
+    release_number = 2;
     base_release_number = tonumber(rpm.expand("%{?-b*}%{!?-b:1}"));
     print(release_number + base_release_number - 1);
 }%{?-e:.%{-e*}}%{?-s:.%{-s*}}%{!?-n:%{?dist}}
@@ -26,9 +26,6 @@
 %ifarch %{ix86} x86_64
 %global with_crocus 1
 %global with_i915   1
-%if !0%{?rhel}
-%global with_intel_clc 1
-%endif
 %global with_iris   1
 %global with_xa     1
 %global platform_vulkan ,intel,intel_hasvk
@@ -68,7 +65,7 @@
 
 Name:           mesa
 Summary:        Mesa graphics libraries
-%global ver 23.1.6
+%global ver 23.0.3
 Version:        %{lua:ver = string.gsub(rpm.expand("%{ver}"), "-", "~"); print(ver)}
 Release:        %autorelease
 License:        MIT
@@ -93,10 +90,8 @@ BuildRequires:  kernel-headers
 # SRPMs for each arch still have the same build dependencies. See:
 # https://bugzilla.redhat.com/show_bug.cgi?id=1859515
 BuildRequires:  pkgconfig(libdrm) >= 2.4.97
-BuildRequires:  pkgconfig(libunwind)
 BuildRequires:  pkgconfig(expat)
 BuildRequires:  pkgconfig(zlib) >= 1.2.3
-BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(libselinux)
 BuildRequires:  pkgconfig(wayland-scanner)
 BuildRequires:  pkgconfig(wayland-protocols) >= 1.8
@@ -123,7 +118,6 @@ BuildRequires:  pkgconfig(xcb-randr)
 BuildRequires:  pkgconfig(xrandr) >= 1.3
 BuildRequires:  bison
 BuildRequires:  flex
-BuildRequires:  lm_sensors-devel
 %if 0%{?with_vdpau}
 BuildRequires:  pkgconfig(vdpau) >= 1.1
 %endif
@@ -149,9 +143,6 @@ BuildRequires:  pkgconfig(valgrind)
 %endif
 BuildRequires:  python3-devel
 BuildRequires:  python3-mako
-%if 0%{?with_intel_clc}
-BuildRequires:  python3-ply
-%endif
 BuildRequires:  vulkan-headers
 BuildRequires:  glslang
 %if 0%{?with_vulkan_hw}
@@ -394,7 +385,7 @@ export RUSTFLAGS="%build_rustflags"
   -Dgallium-nine=%{?with_nine:true}%{!?with_nine:false} \
   -Dgallium-opencl=%{?with_opencl:icd}%{!?with_opencl:disabled} \
 %if 0%{?with_opencl}
-  -Dgallium-rusticl=true \
+  -Dgallium-rusticl=true -Dllvm=enabled -Drust_std=2021 \
 %endif
   -Dvulkan-drivers=%{?vulkan_drivers} \
   -Dvulkan-layers=device-select \
@@ -406,16 +397,12 @@ export RUSTFLAGS="%build_rustflags"
   -Dglx=dri \
   -Degl=enabled \
   -Dglvnd=true \
-%if 0%{?with_intel_clc}
-  -Dintel-clc=enabled \
-%endif
   -Dmicrosoft-clc=disabled \
   -Dllvm=enabled \
   -Dshared-llvm=enabled \
   -Dvalgrind=%{?with_valgrind:enabled}%{!?with_valgrind:disabled} \
   -Dbuild-tests=false \
   -Dselinux=true \
-  -Dandroid-libbacktrace=disabled \
   %{nil}
 %meson_build
 
@@ -632,6 +619,9 @@ popd
 %if 0%{?with_vdpau}
 %files vdpau-drivers
 %{_libdir}/vdpau/libvdpau_nouveau.so.1*
+%if 0%{?with_r300}
+%{_libdir}/vdpau/libvdpau_r300.so.1*
+%endif
 %if 0%{?with_r600}
 %{_libdir}/vdpau/libvdpau_r600.so.1*
 %endif
@@ -667,39 +657,8 @@ popd
 %endif
 
 %changelog
-* Wed Aug 16 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.6-1
-- Update to 23.1.6
-
-* Thu Aug 03 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.5-1
-- Update to 23.1.5
-
-* Sat Jul 22 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.4-1
-- Update to 23.1.4
-
-* Fri Jun 30 2023 Nicolas Chauvet <kwizart@gmail.com> - 23.1.3-1
-- Update to 23.1.3
-
-* Sun Jun 11 2023 Pete Walter <pwalter@fedoraproject.org> - 23.1.2-1
-- Update to 23.1.2
-
-* Sun Jun 11 2023 Neal Gompa <ngompa@fedoraproject.org> - 23.1.1-2
-- Enable stack trace and HUD sensor support
-
-* Tue May 30 2023 Dave Airlie <airlied@redhat.com> - 23.1.1-1
-- Update to mesa 23.1.1
-
-* Fri May 05 2023 Kamil Páral <kparal@redhat.com> - 23.0.3-5
+* Thu May 25 2023 Kamil Páral <kparal@redhat.com> - 23.0.3-2
 - Prevent partial updates (rhbz#2193135)
-
-* Wed May 03 2023 Michel Dänzer <mdaenzer@redhat.com> - 23.0.3-4
-- Do not enable intel-clc for ELN/RHEL
-
-* Mon May 01 2023 Michel Dänzer <mdaenzer@redhat.com> - 23.0.3-3
-- Enable intel-clc for ANV ray tracing support
-
-* Fri Apr 28 2023 Michel Dänzer <mdaenzer@redhat.com> - 23.0.3-2
-- Remove superfluous meson parameters for rusticl
-- Dllvm=enabled is already there unconditionally further down.
 
 * Tue Apr 25 2023 Pete Walter <pwalter@fedoraproject.org> - 23.0.3-1
 - Update to 23.0.3
@@ -713,11 +672,8 @@ popd
 * Thu Apr 13 2023 Pete Walter <pwalter@fedoraproject.org> - 23.0.2-1
 - Update to 23.0.2
 
-* Thu Apr 13 2023 Pete Walter <pwalter@fedoraproject.org> - 23.0.1-3
+* Thu Apr 13 2023 Pete Walter <pwalter@fedoraproject.org> - 23.0.1-2
 - Tighten mesa-va-drivers recommends again (rhbz#2161338)
-
-* Mon Apr 03 2023 František Zatloukal <fzatlouk@redhat.com> - 23.0.1-2
-- Rebuild for LLVM 16
 
 * Sat Mar 25 2023 Pete Walter <pwalter@fedoraproject.org> - 23.0.1-1
 - Update to 23.0.1
