@@ -2,7 +2,7 @@
 ## (rpmautospec version 0.3.5)
 ## RPMAUTOSPEC: autorelease, autochangelog
 %define autorelease(e:s:pb:n) %{?-p:0.}%{lua:
-    release_number = 1;
+    release_number = 2;
     base_release_number = tonumber(rpm.expand("%{?-b*}%{!?-b:1}"));
     print(release_number + base_release_number - 1);
 }%{?-e:.%{-e*}}%{?-s:.%{-s*}}%{!?-n:%{?dist}}
@@ -397,6 +397,7 @@ export RUSTFLAGS="%build_rustflags"
   -Dgallium-rusticl=true \
 %endif
   -Dvulkan-drivers=%{?vulkan_drivers} \
+  -Dvideo-codecs=h264dec,h264enc,h265dec,h265enc,vc1dec \
   -Dvulkan-layers=device-select \
   -Dshared-glapi=enabled \
   -Dgles1=disabled \
